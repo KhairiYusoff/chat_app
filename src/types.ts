@@ -3,6 +3,7 @@ export interface Message {
   content: string;
   sender: string;
   timestamp: Date;
+  type?: 'system';
 }
 
 export interface User {

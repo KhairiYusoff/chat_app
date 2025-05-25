@@ -10,6 +10,17 @@ interface Props {
 export const ChatMessage: React.FC<Props> = ({ message }) => {
   const { username } = useUserStore();
   const isOwnMessage = message.sender === username;
+  const isSystemMessage = message.type === 'system';
+
+  if (isSystemMessage) {
+    return (
+      <div className="flex justify-center mb-4">
+        <div className="bg-gray-100 rounded-full px-4 py-1">
+          <p className="text-sm text-gray-500">{message.content}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -19,8 +19,10 @@ const users = new Map();
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  let currentUsername = '';
 
   socket.on('user:join', (username) => {
+    currentUsername = username;
     users.set(socket.id, { id: socket.id, username, isOnline: true });
     io.emit('users:update', Array.from(users.values()));
   });
@@ -30,6 +32,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    if (currentUsername) {
+      io.emit('user:left', currentUsername);
+    }
     users.delete(socket.id);
     io.emit('users:update', Array.from(users.values()));
     console.log('User disconnected:', socket.id);

@@ -7,9 +7,13 @@ import { Message, User } from '../types';
 export const useSocket = () => {
   const socketRef = useRef<Socket>();
   const { username } = useUserStore();
-  const { addMessage, setUsers } = useChatStore();
+  const { addMessage, setUsers, addSystemMessage } = useChatStore();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    // Initialize audio
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
+    
     socketRef.current = io('http://localhost:3000');
 
     socketRef.current.on('connect', () => {
@@ -19,16 +23,21 @@ export const useSocket = () => {
 
     socketRef.current.on('message:received', (message: Message) => {
       addMessage(message);
+      audioRef.current?.play().catch(err => console.log('Audio play failed:', err));
     });
 
     socketRef.current.on('users:update', (users: User[]) => {
       setUsers(users);
     });
 
+    socketRef.current.on('user:left', (username: string) => {
+      addSystemMessage(`${username} has left the chat`);
+    });
+
     return () => {
       socketRef.current?.disconnect();
     };
-  }, [username, addMessage, setUsers]);
+  }, [username, addMessage, setUsers, addSystemMessage]);
 
   const sendMessage = (content: string) => {
     if (socketRef.current) {
