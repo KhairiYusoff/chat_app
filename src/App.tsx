@@ -1,14 +1,30 @@
-import React from 'react';
-import { LoginScreen } from './components/LoginScreen';
+import React, { useEffect } from 'react';
+import { AuthScreen } from './components/AuthScreen';
 import { ChatScreen } from './components/ChatScreen';
-import { useUserStore } from './store/userStore';
+import { useAuthStore } from './store/authStore';
+import { Loader2 } from 'lucide-react';
 
 function App() {
-  const { isLoggedIn } = useUserStore();
+  const { isAuthenticated, isLoading, initializeAuth } = useAuthStore();
+
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center space-x-3">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="text-lg text-gray-600">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isLoggedIn ? <ChatScreen /> : <LoginScreen />}
+      {isAuthenticated ? <ChatScreen /> : <AuthScreen />}
     </div>
   );
 }

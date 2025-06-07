@@ -2,6 +2,10 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import mongoose from 'mongoose';
+import authRoutes from './routes/auth.js';
+import { authenticateSocket } from './middleware/auth.js';
+import { User } from './models/User.js';
 
 const app = express();
 const server = createServer(app);
@@ -12,36 +16,85 @@ const io = new Server(server, {
   },
 });
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-const users = new Map();
+// Connect to MongoDB
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chatapp';
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-  let currentUsername = '';
+// Routes
+app.use('/api/auth', authRoutes);
 
-  socket.on('user:join', (username) => {
-    currentUsername = username;
-    users.set(socket.id, { id: socket.id, username, isOnline: true });
-    io.emit('users:update', Array.from(users.values()));
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Socket authentication middleware
+io.use(authenticateSocket);
+
+const connectedUsers = new Map();
+
+io.on('connection', async (socket) => {
+  console.log('User connected:', socket.user.username);
+  
+  // Update user online status
+  await User.findByIdAndUpdate(socket.user._id, {
+    isOnline: true,
+    lastSeen: new Date()
   });
+
+  // Store user connection
+  connectedUsers.set(socket.user._id.toString(), {
+    socketId: socket.id,
+    user: {
+      id: socket.user._id,
+      username: socket.user.username,
+      avatar: socket.user.avatar,
+      isOnline: true
+    }
+  });
+
+  // Broadcast updated user list
+  const userList = Array.from(connectedUsers.values()).map(conn => conn.user);
+  io.emit('users:update', userList);
+
+  // Join user to their personal room for private messages
+  socket.join(socket.user._id.toString());
 
   socket.on('message:send', (message) => {
-    socket.broadcast.emit('message:received', message);
+    // Broadcast to all other users
+    socket.broadcast.emit('message:received', {
+      ...message,
+      sender: socket.user.username,
+      senderAvatar: socket.user.avatar
+    });
   });
 
-  socket.on('disconnect', () => {
-    if (currentUsername) {
-      io.emit('user:left', currentUsername);
-    }
-    users.delete(socket.id);
-    io.emit('users:update', Array.from(users.values()));
-    console.log('User disconnected:', socket.id);
+  socket.on('disconnect', async () => {
+    console.log('User disconnected:', socket.user.username);
+    
+    // Update user offline status
+    await User.findByIdAndUpdate(socket.user._id, {
+      isOnline: false,
+      lastSeen: new Date()
+    });
+
+    // Remove from connected users
+    connectedUsers.delete(socket.user._id.toString());
+
+    // Broadcast user left and updated user list
+    socket.broadcast.emit('user:left', socket.user.username);
+    const userList = Array.from(connectedUsers.values()).map(conn => conn.user);
+    io.emit('users:update', userList);
   });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
