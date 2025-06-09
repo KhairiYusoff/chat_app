@@ -26,6 +26,7 @@ export const authenticateToken = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
+    console.error('Authentication error:', error);
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
@@ -48,6 +49,7 @@ export const authenticateSocket = async (socket, next) => {
     socket.user = user;
     next();
   } catch (error) {
+    console.error('Socket authentication error:', error);
     next(new Error('Authentication error'));
   }
 };
