@@ -27,19 +27,38 @@ app.use(express.json());
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
-  console.error('MONGODB_URI environment variable is not set');
+  console.error('❌ MONGODB_URI environment variable is not set');
+  console.log('Please check your .env file');
   process.exit(1);
 }
 
+console.log('🔄 Connecting to MongoDB...');
+console.log('📍 Database URL:', MONGODB_URI.replace(/\/\/.*@/, '//***:***@')); // Hide credentials in logs
+
 mongoose.connect(MONGODB_URI)
   .then(() => {
-    console.log('✅ Connected to MongoDB Atlas');
+    console.log('✅ Connected to MongoDB Atlas successfully!');
     console.log('📊 Database: chatapp');
+    console.log('🏠 Collection: users');
   })
   .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
+    console.error('❌ MongoDB connection error:', err.message);
+    console.error('🔍 Full error:', err);
     process.exit(1);
   });
+
+// Monitor connection status
+mongoose.connection.on('connected', () => {
+  console.log('🟢 Mongoose connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('🔴 Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('🟡 Mongoose disconnected from MongoDB');
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -49,8 +68,27 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    dbName: mongoose.connection.db?.databaseName || 'Not connected'
   });
+});
+
+// Test route for debugging
+app.get('/api/test', async (req, res) => {
+  try {
+    const userCount = await User.countDocuments();
+    res.json({
+      message: 'Server is working!',
+      database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+      userCount,
+      dbName: mongoose.connection.db?.databaseName
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Database test failed',
+      details: error.message
+    });
+  }
 });
 
 // Socket authentication middleware
@@ -118,4 +156,6 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌐 Frontend: http://localhost:5173`);
   console.log(`🔗 Backend: http://localhost:${PORT}`);
+  console.log(`🩺 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`🧪 Test endpoint: http://localhost:${PORT}/api/test`);
 });
